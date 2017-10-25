@@ -34,6 +34,8 @@ DEFINE_string(solver, "",
     "The solver definition protocol buffer text file.");
 DEFINE_string(model, "",
     "The model definition protocol buffer text file.");
+DEFINE_int32(step, 1,
+    "The compression step, step 1 for train and compress, step 2 for retrain, step 3 for just forward.");
 DEFINE_string(phase, "",
     "Optional; network phase (TRAIN or TEST). Only used for 'time'.");
 DEFINE_int32(level, 0,
@@ -191,6 +193,10 @@ int train() {
   for (int i = 0; i < stages.size(); i++) {
     solver_param.mutable_train_state()->add_stage(stages[i]);
   }
+
+  // @liangchenye init step
+  Caffe::SetStep(FLAGS_step);
+  // end init step
 
   // If the gpus flag is not provided, allow the mode and device to be set
   // in the solver prototxt.

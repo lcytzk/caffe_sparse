@@ -156,10 +156,34 @@ void caffe_gpu_gemm(const CBLAS_TRANSPOSE TransA,
     const Dtype alpha, const Dtype* A, const Dtype* B, const Dtype beta,
     Dtype* C);
 
+// TODO for alpha version, inner product layer should be considered
+// only convert gemm, gemv to sparse is enough.
+// sparse
+template <typename Dtype>
+void caffe_gpu_gemm_sparse(const CBLAS_TRANSPOSE TransB,
+    const CBLAS_TRANSPOSE TransA, const int M, const int N, const int K,
+    const Dtype* B, const int nnzA, const Dtype alpha,
+    const Dtype* csrValA, const int* csrRowPtrA, const int* csrColIndA,
+    const Dtype beta, Dtype* C);
+
 template <typename Dtype>
 void caffe_gpu_gemv(const CBLAS_TRANSPOSE TransA, const int M, const int N,
     const Dtype alpha, const Dtype* A, const Dtype* x, const Dtype beta,
     Dtype* y);
+
+template <typename Dtype>
+void caffe_gpu_gemv_sparse(const CBLAS_TRANSPOSE TransA, const int M,
+    const int N, const Dtype alpha, const int nnzA,
+    const Dtype* csrValA, const int *csrRowPtrA, const int *csrColIndA,
+    const Dtype* x, const Dtype beta, Dtype* y);
+
+template <typename Dtype>
+void caffe_gpu_sparse_add(const int colSize, const int rowSize, const int nnz,
+        const Dtype* val, const int* rowPtr, const int* colInd, Dtype* y);
+
+//template <typename Dtype>
+//void caffe_dense2sparse(int m, int n, const Dtype* A, float percentage, int* nnz, Dtype** val, int** colInd, int** rowPtr);
+// end sparse
 
 template <typename Dtype>
 void caffe_gpu_axpy(const int N, const Dtype alpha, const Dtype* X,

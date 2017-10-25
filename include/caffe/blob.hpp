@@ -216,6 +216,14 @@ class Blob {
     return diff_;
   }
 
+  inline bool sparse() {
+    return sparse_;
+  }
+
+  inline int nnz() {
+    return nnz_;
+  }
+
   const Dtype* cpu_data() const;
   void set_cpu_data(Dtype* data);
   const int* gpu_shape() const;
@@ -223,13 +231,35 @@ class Blob {
   void set_gpu_data(Dtype* data);
   const Dtype* cpu_diff() const;
   const Dtype* gpu_diff() const;
+
+  // @liangchenye
+  const Dtype* cpu_val() const;
+  const Dtype* gpu_val() const;
+  const Dtype* cpu_one_val() const;
+  const Dtype* gpu_one_val() const;
+  const int* cpu_row_ptr() const;
+  const int* gpu_row_ptr() const;
+  const int* cpu_col_ind() const;
+  const int* gpu_col_ind() const;
+
   Dtype* mutable_cpu_data();
   Dtype* mutable_gpu_data();
   Dtype* mutable_cpu_diff();
   Dtype* mutable_gpu_diff();
+  
+  // @liangchenye
+  Dtype* mutable_cpu_val();
+  Dtype* mutable_gpu_val();
+  int* mutable_cpu_row_ptr();
+  int* mutable_gpu_row_ptr();
+  int* mutable_cpu_one_val();
+  int* mutable_gpu_one_val();
+  int* mutable_cpu_col_ind();
+  int* mutable_gpu_col_ind();
+
   void Update();
   void FromProto(const BlobProto& proto, bool reshape = true);
-  void ToProto(BlobProto* proto, bool write_diff = false) const;
+  void ToProto(BlobProto* proto, bool write_diff = false);
 
   /// @brief Compute the sum of absolute values (L1 norm) of the data.
   Dtype asum_data() const;
@@ -270,6 +300,15 @@ class Blob {
   shared_ptr<SyncedMemory> data_;
   shared_ptr<SyncedMemory> diff_;
   shared_ptr<SyncedMemory> shape_data_;
+
+  // @liangchenye add
+  bool sparse_;
+  int nnz_;
+  shared_ptr<SyncedMemory> val_;
+  shared_ptr<SyncedMemory> one_val_;
+  shared_ptr<SyncedMemory> row_ptr_;
+  shared_ptr<SyncedMemory> col_ind_;
+
   vector<int> shape_;
   int count_;
   int capacity_;

@@ -133,6 +133,8 @@ class Caffe {
   }
 #ifndef CPU_ONLY
   inline static cublasHandle_t cublas_handle() { return Get().cublas_handle_; }
+  inline static cusparseHandle_t cusparse_handle() { return Get().cusparse_handle_; }
+  inline static cusparseMatDescr_t cusparse_descr(){ return Get().cusparse_descr_;}
   inline static curandGenerator_t curand_generator() {
     return Get().curand_generator_;
   }
@@ -166,15 +168,20 @@ class Caffe {
   inline static bool multiprocess() { return Get().multiprocess_; }
   inline static void set_multiprocess(bool val) { Get().multiprocess_ = val; }
   inline static bool root_solver() { return Get().solver_rank_ == 0; }
+  inline static int step() { return Get().step_; }
+  inline static void SetStep(int s) { Get().step_ = s; }
 
  protected:
 #ifndef CPU_ONLY
   cublasHandle_t cublas_handle_;
+  cusparseHandle_t cusparse_handle_;
+  cusparseMatDescr_t cusparse_descr_;
   curandGenerator_t curand_generator_;
 #endif
   shared_ptr<RNG> random_generator_;
 
   Brew mode_;
+  int step_;
 
   // Parallel training
   int solver_count_;

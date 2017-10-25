@@ -42,6 +42,46 @@ void caffe_gpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
       N, M, K, &alpha, B, ldb, A, lda, &beta, C, N));
 }
 
+// gemm sparse start
+template <>
+void caffe_gpu_gemm_sparse<float>(const CBLAS_TRANSPOSE TransB,
+    const CBLAS_TRANSPOSE TransA, const int M, const int N, const int K,
+    const float* B, const int nnzA, const float alpha,
+    const float* csrValA, const int* csrRowPtrA, const int* csrColIndA,
+    const float beta, float* C) {
+  // Note that cublas follows fortran order.
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+  cusparseOperation_t cuTransA =
+      (TransA == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+  cusparseOperation_t cuTransB =
+      (TransB == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+  CUSPARSE_CHECK(cusparseScsrmm2(Caffe::cusparse_handle(), cuTransA, cuTransB,
+      N, M, K, nnzA, &alpha,
+      Caffe::cusparse_descr(), csrValA, csrRowPtrA, csrColIndA,
+      B, ldb, &beta, C, lda));
+}
+
+template <>
+void caffe_gpu_gemm_sparse<double>(const CBLAS_TRANSPOSE TransB,
+    const CBLAS_TRANSPOSE TransA, const int M, const int N, const int K,
+    const double* B, const int nnzA, const double alpha,
+    const double* csrValA, const int* csrRowPtrA, const int* csrColIndA,
+    const double beta, double* C) {
+  // Note that cublas follows fortran order.
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+  cusparseOperation_t cuTransA =
+      (TransA == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+  cusparseOperation_t cuTransB =
+      (TransB == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+  CUSPARSE_CHECK(cusparseDcsrmm2(Caffe::cusparse_handle(), cuTransA, cuTransB,
+      N, M, K, nnzA, &alpha,
+      Caffe::cusparse_descr(), csrValA, csrRowPtrA, csrColIndA,
+      B, ldb, &beta, C, lda));
+}
+// gemm sparse end
+
 template <>
 void caffe_gpu_gemv<float>(const CBLAS_TRANSPOSE TransA, const int M,
     const int N, const float alpha, const float* A, const float* x,
@@ -61,6 +101,30 @@ void caffe_gpu_gemv<double>(const CBLAS_TRANSPOSE TransA, const int M,
   CUBLAS_CHECK(cublasDgemv(Caffe::cublas_handle(), cuTransA, N, M, &alpha,
       A, N, x, 1, &beta, y, 1));
 }
+
+// sparse
+template <>
+void caffe_gpu_gemv_sparse<float>(const CBLAS_TRANSPOSE TransA, const int M,
+    const int N, const float alpha, const int nnzA,
+    const float* csrValA, const int *csrRowPtrA, const int *csrColIndA,
+    const float* x, const float beta, float* y) {
+  cusparseOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+  CUSPARSE_CHECK(cusparseScsrmv(Caffe::cusparse_handle(), cuTransA, N, M, nnzA, &alpha,
+      Caffe::cusparse_descr(), csrValA, csrRowPtrA, csrColIndA, x, &beta, y));
+}
+
+template <>
+void caffe_gpu_gemv_sparse<double>(const CBLAS_TRANSPOSE TransA, const int M,
+    const int N, const double alpha, const int nnzA,
+    const double* csrValA, const int *csrRowPtrA, const int *csrColIndA,
+    const double* x, const double beta, double* y) {
+  cusparseOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+  CUSPARSE_CHECK(cusparseDcsrmv(Caffe::cusparse_handle(), cuTransA, N, M, nnzA, &alpha,
+      Caffe::cusparse_descr(), csrValA, csrRowPtrA, csrColIndA, x, &beta, y));
+}
+// end sparse
 
 template <>
 void caffe_gpu_axpy<float>(const int N, const float alpha, const float* X,
@@ -455,5 +519,142 @@ void caffe_gpu_rng_gaussian(const int n, const double mu, const double sigma,
   CURAND_CHECK(
       curandGenerateNormalDouble(Caffe::curand_generator(), r, n, mu, sigma));
 }
+
+template <typename Dtype>
+__global__ void sparse_add_kernel(const int colSize, const int nnz, const Dtype* dense_val, const int* rowInd, const int* colInd, Dtype* y) {
+  for(int index = blockIdx.x * blockDim.x + threadIdx.x;
+          index < nnz;
+          index += blockDim.x * gridDim.x) {
+    y[index] += dense_val[colInd[index] * colSize + rowInd[index]];
+  }
+}
+
+template <>
+void caffe_gpu_sparse_add<float>(const int colSize, const int rowSize, const int nnz, const float* val, const int* rowPtr, const int* colInd, float* y) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  int* rowInd = NULL;
+  cusparseXcsr2coo(Caffe::cusparse_handle(), rowPtr, nnz, rowSize, rowInd, CUSPARSE_INDEX_BASE_ZERO);
+  sparse_add_kernel<float><<<CAFFE_GET_BLOCKS(colSize), CAFFE_CUDA_NUM_THREADS>>>(
+      colSize, nnz, val, rowInd, colInd, y);
+  cudaFree(rowInd);
+}
+
+template <>
+void caffe_gpu_sparse_add<double>(const int colSize, const int rowSize, const int nnz, const double* val, const int* rowPtr, const int* colInd, double* y) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  int* rowInd = NULL;
+  cusparseXcsr2coo(Caffe::cusparse_handle(), rowPtr, nnz, rowSize, rowInd, CUSPARSE_INDEX_BASE_ZERO);
+  sparse_add_kernel<double><<<CAFFE_GET_BLOCKS(colSize), CAFFE_CUDA_NUM_THREADS>>>(
+      colSize, nnz, val, rowInd, colInd, y);
+  cudaFree(rowInd);
+}
+
+//template<>
+//void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
+//        int *nnz, float** val, int** colInd, int** rowPtr) {
+//  int *d_csrRowPtrC = NULL;
+//  int *d_csrColIndC = NULL;
+//  float *d_csrValC = NULL;
+//  char *d_work= NULL;
+//  pruneInfo_t info = NULL;
+//  size_t lworkInBytes = 0;
+//  cusparseCreatePruneInfo(&info);
+//
+//  CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentae_bufferSizeExt(
+//    Caffe::cusparse_handle(),
+//    m, n, A, m, percentage,
+//    Caffe::cusparse_descr(),
+//    d_csrValC,
+//    d_csrRowPtrC,
+//    d_csrColIndC,
+//    info, &lworkInBytes
+//  ));
+//  cudaMalloc((void**)&d_work, lworkInBytes);
+//  CUSPARSE_CHECK(cusparseSpruneDense2csrNnzByPercentage(
+//    Caffe::cusparse_handle(),
+//    m, n, A, m, percentage,
+//    Caffe::cusparse_descr(),
+//    d_csrRowPtrC,
+//    nnz, info, d_work
+//  ));
+//  cudaMalloc((void**)&d_csrColIndC, sizeof(int ) * nnz);
+//  cudaMalloc((void**)&d_csrValC , sizeof(float) * nnz);
+//  CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentage(
+//    Caffe::cusparse_handle(),
+//    m, n, A, m, percentage,
+//    Caffe::cusparse_descr(),
+//    d_csrValC,
+//    d_csrRowPtrC,
+//    d_csrColIndC,
+//    info, d_work
+//  ));
+//  *rowPtr = (int* )malloc(sizeof(int )*(m + 1));
+//  *colInd = (int* )malloc(sizeof(int )*nnz);
+//  *val = (float*)malloc(sizeof(float)*nnz);
+//
+//  cudaMemcpy(rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
+//  cudaMemcpy(colInd, d_csrColIndC, sizeof(int)*nnz, cudaMemcpyDeviceToHost);
+//  cudaMemcpy(val, d_csrValC , sizeof(float)*nnz, cudaMemcpyDeviceToHost);
+//
+//  if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
+//  if (d_csrColIndC) cudaFree(d_csrColIndC);
+//  if (d_csrValC) cudaFree(d_csrValC);
+//
+//  if(info) cusparseDestroyPruneInfo(info);
+//}
+//
+//template<>
+//void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
+//        int *nnz, double** val, int** colInd, int** rowPtr) {
+//  int *d_csrRowPtrC = NULL;
+//  int *d_csrColIndC = NULL;
+//  double*d_csrValC = NULL;
+//  char *d_work= NULL;
+//  pruneInfo_t info = NULL;
+//  size_t lworkInBytes = 0;
+//  cusparseCreatePruneInfo(&info);
+//
+//  CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage_bufferSizeExt(
+//    Caffe::cusparse_handle(),
+//    m, n, A, m, percentage,
+//    Caffe::cusparse_descr(),
+//    d_csrValC,
+//    d_csrRowPtrC,
+//    d_csrColIndC,
+//    info, &lworkInBytes
+//  ));
+//  cudaMalloc((void**)&d_work, lworkInBytes);
+//  CUSPARSE_CHECK(cusparseDpruneDense2csrNnzByPercentage(
+//    Caffe::cusparse_handle(),
+//    m, n, A, m, percentage,
+//    Caffe::cusparse_descr(),
+//    d_csrRowPtrC,
+//    nnz, info, d_work
+//  ));
+//  cudaMalloc((void**)&d_csrColIndC, sizeof(int ) * nnz);
+//  cudaMalloc((void**)&d_csrValC , sizeof(double) * nnz);
+//  CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage(
+//    Caffe::cusparse_handle(),
+//    m, n, A, m, percentage,
+//    Caffe::cusparse_descr(),
+//    d_csrValC,
+//    d_csrRowPtrC,
+//    d_csrColIndC,
+//    info, d_work
+//  ));
+//  *rowPtr = (int* )malloc(sizeof(int )*(m + 1));
+//  *colInd = (int* )malloc(sizeof(int )*nnz);
+//  *val = (double*)malloc(sizeof(double)*nnz);
+//
+//  cudaMemcpy(rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
+//  cudaMemcpy(colInd, d_csrColIndC, sizeof(int)*nnz, cudaMemcpyDeviceToHost);
+//  cudaMemcpy(val, d_csrValC , sizeof(double)*nnz, cudaMemcpyDeviceToHost);
+//
+//  if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
+//  if (d_csrColIndC) cudaFree(d_csrColIndC);
+//  if (d_csrValC) cudaFree(d_csrValC);
+//
+//  if(info) cusparseDestroyPruneInfo(info);
+//}
 
 }  // namespace caffe

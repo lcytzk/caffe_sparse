@@ -41,6 +41,8 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     capacity_ = count_;
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    // TODO
+    diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
   }
 }
 
@@ -129,6 +131,24 @@ const Dtype* Blob<Dtype>::gpu_diff() const {
 }
 
 template <typename Dtype>
+const Dtype* Blob<Dtype>::gpu_val() const {
+  CHECK(val_);
+  return (const Dtype*)val_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::gpu_row_ptr() const {
+  CHECK(row_ptr_);
+  return (const int*)row_ptr_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::gpu_col_ind() const {
+  CHECK(col_ind_);
+  return (const int*)col_ind_->gpu_data();
+}
+
+template <typename Dtype>
 Dtype* Blob<Dtype>::mutable_cpu_data() {
   CHECK(data_);
   return static_cast<Dtype*>(data_->mutable_cpu_data());
@@ -150,6 +170,24 @@ template <typename Dtype>
 Dtype* Blob<Dtype>::mutable_gpu_diff() {
   CHECK(diff_);
   return static_cast<Dtype*>(diff_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+Dtype* Blob<Dtype>::mutable_gpu_val() {
+  CHECK(val_);
+  return static_cast<Dtype*>(val_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_gpu_row_ptr() {
+  CHECK(row_ptr_);
+  return static_cast<int*>(row_ptr_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_gpu_col_ind() {
+  CHECK(col_ind_);
+  return static_cast<int*>(col_ind_->mutable_gpu_data());
 }
 
 template <typename Dtype>
@@ -184,9 +222,13 @@ void Blob<Dtype>::Update() {
   case SyncedMemory::SYNCED:
 #ifndef CPU_ONLY
     // perform computation on GPU
-    caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
+    if(sparse_) {
+      //caffe_gpu_sparse_add();
+    } else {
+      caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
         static_cast<const Dtype*>(diff_->gpu_data()),
         static_cast<Dtype*>(data_->mutable_gpu_data()));
+    }
 #else
     NO_GPU;
 #endif
@@ -498,6 +540,21 @@ void Blob<Dtype>::FromProto(const BlobProto& proto, bool reshape) {
       data_vec[i] = proto.data(i);
     }
   }
+  if(proto.val_size() > 0) {
+    nnz_ = proto.nnz();
+    Dtype* sparse_data = mutable_cpu_val();
+    int* one_val = mutable_cpu_one_val();
+    int* col_ind = mutable_cpu_col_ind();
+    int* row_ptr = mutable_cpu_row_ptr();
+    for(int i = 0; i < nnz_; ++i) {
+      sparse_data[i] = proto.val(i);
+      one_val[i] = 1;
+      col_ind[i] = proto.col_ind(i);
+    }
+    for(int i = 0; i < proto.height() + 1; ++i) {
+      row_ptr[i] = proto.row_ptr(i);
+    }
+  }
   if (proto.double_diff_size() > 0) {
     CHECK_EQ(count_, proto.double_diff_size());
     Dtype* diff_vec = mutable_cpu_diff();
@@ -514,16 +571,39 @@ void Blob<Dtype>::FromProto(const BlobProto& proto, bool reshape) {
 }
 
 template <>
-void Blob<double>::ToProto(BlobProto* proto, bool write_diff) const {
+void Blob<double>::ToProto(BlobProto* proto, bool write_diff) {
   proto->clear_shape();
   for (int i = 0; i < shape_.size(); ++i) {
     proto->mutable_shape()->add_dim(shape_[i]);
   }
   proto->clear_double_data();
   proto->clear_double_diff();
-  const double* data_vec = cpu_data();
-  for (int i = 0; i < count_; ++i) {
-    proto->add_double_data(data_vec[i]);
+  if(sparse_) {
+    // TODO  step 1 need to prune the weight
+    double* val = NULL;
+    int* rowPtr = NULL;
+    int* colInd = NULL;
+    int nnz;
+    if(Caffe::step() == 1) {
+      caffe_dense2sparse(shape_[2], shape_[3], cpu_data(), 90, &nnz, &val, &colInd, &rowPtr);
+    } else {
+        val = mutable_cpu_val();
+        rowPtr = mutable_cpu_row_ptr();
+        colInd = mutable_cpu_col_ind();
+    }
+    proto->set_nnz(nnz);
+    for(int i = 0; i < nnz; ++i) {
+      proto->add_val(val[i]);
+      proto->add_col_ind(colInd[i]);
+    }
+    for(int i = 0; i < shape_[2] + 1; ++i) {
+      proto->add_row_ptr(rowPtr[i]);
+    }
+  } else {
+    const double* data_vec = cpu_data();
+    for (int i = 0; i < count_; ++i) {
+      proto->add_double_data(data_vec[i]);
+    }
   }
   if (write_diff) {
     const double* diff_vec = cpu_diff();
@@ -534,16 +614,39 @@ void Blob<double>::ToProto(BlobProto* proto, bool write_diff) const {
 }
 
 template <>
-void Blob<float>::ToProto(BlobProto* proto, bool write_diff) const {
+void Blob<float>::ToProto(BlobProto* proto, bool write_diff) {
   proto->clear_shape();
   for (int i = 0; i < shape_.size(); ++i) {
     proto->mutable_shape()->add_dim(shape_[i]);
   }
   proto->clear_data();
   proto->clear_diff();
-  const float* data_vec = cpu_data();
-  for (int i = 0; i < count_; ++i) {
-    proto->add_data(data_vec[i]);
+  if(sparse_) {
+    // TODO  step 1 need to prune the weight
+    float* val = NULL;
+    int* rowPtr = NULL;
+    int* colInd = NULL;
+    int nnz;
+    if(Caffe::step() == 1) {
+      caffe_dense2sparse(shape_[2], shape_[3], cpu_data(), 90, &nnz, &val, &colInd, &rowPtr);
+    } else {
+        val = mutable_cpu_val();
+        rowPtr = mutable_cpu_row_ptr();
+        colInd = mutable_cpu_col_ind();
+    }
+    proto->set_nnz(nnz);
+    for(int i = 0; i < nnz; ++i) {
+      proto->add_val(val[i]);
+      proto->add_col_ind(colInd[i]);
+    }
+    for(int i = 0; i < shape_[2] + 1; ++i) {
+      proto->add_row_ptr(rowPtr[i]);
+    }
+  } else {
+    const float* data_vec = cpu_data();
+    for (int i = 0; i < count_; ++i) {
+      proto->add_data(data_vec[i]);
+    }
   }
   if (write_diff) {
     const float* diff_vec = cpu_diff();
