@@ -549,112 +549,114 @@ void caffe_gpu_sparse_add<double>(const int colSize, const int rowSize, const in
   cudaFree(rowInd);
 }
 
-//template<>
-//void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
-//        int *nnz, float** val, int** colInd, int** rowPtr) {
-//  int *d_csrRowPtrC = NULL;
-//  int *d_csrColIndC = NULL;
-//  float *d_csrValC = NULL;
-//  char *d_work= NULL;
-//  pruneInfo_t info = NULL;
-//  size_t lworkInBytes = 0;
-//  cusparseCreatePruneInfo(&info);
-//
-//  CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentae_bufferSizeExt(
-//    Caffe::cusparse_handle(),
-//    m, n, A, m, percentage,
-//    Caffe::cusparse_descr(),
-//    d_csrValC,
-//    d_csrRowPtrC,
-//    d_csrColIndC,
-//    info, &lworkInBytes
-//  ));
-//  cudaMalloc((void**)&d_work, lworkInBytes);
-//  CUSPARSE_CHECK(cusparseSpruneDense2csrNnzByPercentage(
-//    Caffe::cusparse_handle(),
-//    m, n, A, m, percentage,
-//    Caffe::cusparse_descr(),
-//    d_csrRowPtrC,
-//    nnz, info, d_work
-//  ));
-//  cudaMalloc((void**)&d_csrColIndC, sizeof(int ) * nnz);
-//  cudaMalloc((void**)&d_csrValC , sizeof(float) * nnz);
-//  CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentage(
-//    Caffe::cusparse_handle(),
-//    m, n, A, m, percentage,
-//    Caffe::cusparse_descr(),
-//    d_csrValC,
-//    d_csrRowPtrC,
-//    d_csrColIndC,
-//    info, d_work
-//  ));
-//  *rowPtr = (int* )malloc(sizeof(int )*(m + 1));
-//  *colInd = (int* )malloc(sizeof(int )*nnz);
-//  *val = (float*)malloc(sizeof(float)*nnz);
-//
-//  cudaMemcpy(rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
-//  cudaMemcpy(colInd, d_csrColIndC, sizeof(int)*nnz, cudaMemcpyDeviceToHost);
-//  cudaMemcpy(val, d_csrValC , sizeof(float)*nnz, cudaMemcpyDeviceToHost);
-//
-//  if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
-//  if (d_csrColIndC) cudaFree(d_csrColIndC);
-//  if (d_csrValC) cudaFree(d_csrValC);
-//
-//  if(info) cusparseDestroyPruneInfo(info);
-//}
-//
-//template<>
-//void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
-//        int *nnz, double** val, int** colInd, int** rowPtr) {
-//  int *d_csrRowPtrC = NULL;
-//  int *d_csrColIndC = NULL;
-//  double*d_csrValC = NULL;
-//  char *d_work= NULL;
-//  pruneInfo_t info = NULL;
-//  size_t lworkInBytes = 0;
-//  cusparseCreatePruneInfo(&info);
-//
-//  CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage_bufferSizeExt(
-//    Caffe::cusparse_handle(),
-//    m, n, A, m, percentage,
-//    Caffe::cusparse_descr(),
-//    d_csrValC,
-//    d_csrRowPtrC,
-//    d_csrColIndC,
-//    info, &lworkInBytes
-//  ));
-//  cudaMalloc((void**)&d_work, lworkInBytes);
-//  CUSPARSE_CHECK(cusparseDpruneDense2csrNnzByPercentage(
-//    Caffe::cusparse_handle(),
-//    m, n, A, m, percentage,
-//    Caffe::cusparse_descr(),
-//    d_csrRowPtrC,
-//    nnz, info, d_work
-//  ));
-//  cudaMalloc((void**)&d_csrColIndC, sizeof(int ) * nnz);
-//  cudaMalloc((void**)&d_csrValC , sizeof(double) * nnz);
-//  CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage(
-//    Caffe::cusparse_handle(),
-//    m, n, A, m, percentage,
-//    Caffe::cusparse_descr(),
-//    d_csrValC,
-//    d_csrRowPtrC,
-//    d_csrColIndC,
-//    info, d_work
-//  ));
-//  *rowPtr = (int* )malloc(sizeof(int )*(m + 1));
-//  *colInd = (int* )malloc(sizeof(int )*nnz);
-//  *val = (double*)malloc(sizeof(double)*nnz);
-//
-//  cudaMemcpy(rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
-//  cudaMemcpy(colInd, d_csrColIndC, sizeof(int)*nnz, cudaMemcpyDeviceToHost);
-//  cudaMemcpy(val, d_csrValC , sizeof(double)*nnz, cudaMemcpyDeviceToHost);
-//
-//  if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
-//  if (d_csrColIndC) cudaFree(d_csrColIndC);
-//  if (d_csrValC) cudaFree(d_csrValC);
-//
-//  if(info) cusparseDestroyPruneInfo(info);
-//}
+template<>
+void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
+        int *nnz, float** val, int** colInd, int** rowPtr) {
+  int *d_csrRowPtrC = NULL;
+  int *d_csrColIndC = NULL;
+  float *d_csrValC = NULL;
+  char *d_work= NULL;
+  pruneInfo_t info = NULL;
+  size_t lworkInBytes = 0;
+  cusparseCreatePruneInfo(&info);
+
+  cudaMalloc((void**)&d_csrRowPtrC, sizeof(int)*(m+1));
+  CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentage_bufferSizeExt(
+    Caffe::cusparse_handle(),
+    m, n, A, m, percentage,
+    Caffe::cusparse_descr(),
+    d_csrValC,
+    d_csrRowPtrC,
+    d_csrColIndC,
+    info, &lworkInBytes
+  ));
+  cudaMalloc((void**)&d_work, lworkInBytes);
+  CUSPARSE_CHECK(cusparseSpruneDense2csrNnzByPercentage(
+    Caffe::cusparse_handle(),
+    m, n, A, m, percentage,
+    Caffe::cusparse_descr(),
+    d_csrRowPtrC,
+    nnz, info, d_work
+  ));
+  cudaMalloc((void**)&d_csrColIndC, sizeof(int) * (*nnz));
+  cudaMalloc((void**)&d_csrValC, sizeof(float) * (*nnz));
+  CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentage(
+    Caffe::cusparse_handle(),
+    m, n, A, m, percentage,
+    Caffe::cusparse_descr(),
+    d_csrValC,
+    d_csrRowPtrC,
+    d_csrColIndC,
+    info, d_work
+  ));
+  *rowPtr = (int*) malloc(sizeof(int )*(m + 1));
+  *colInd = (int*) malloc(sizeof(int )* (*nnz));
+  *val = (float*) malloc(sizeof(float)* (*nnz));
+
+  cudaMemcpy(*rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
+  cudaMemcpy(*colInd, d_csrColIndC, sizeof(int)* (*nnz), cudaMemcpyDeviceToHost);
+  cudaMemcpy(*val, d_csrValC , sizeof(float)* (*nnz), cudaMemcpyDeviceToHost);
+
+  if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
+  if (d_csrColIndC) cudaFree(d_csrColIndC);
+  if (d_csrValC) cudaFree(d_csrValC);
+
+  if(info) cusparseDestroyPruneInfo(info);
+}
+
+template<>
+void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
+        int *nnz, double** val, int** colInd, int** rowPtr) {
+  int *d_csrRowPtrC = NULL;
+  int *d_csrColIndC = NULL;
+  double*d_csrValC = NULL;
+  char *d_work= NULL;
+  pruneInfo_t info = NULL;
+  size_t lworkInBytes = 0;
+  cusparseCreatePruneInfo(&info);
+
+  cudaMalloc((void**)&d_csrRowPtrC, sizeof(int)*(m+1));
+  CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage_bufferSizeExt(
+    Caffe::cusparse_handle(),
+    m, n, A, m, percentage,
+    Caffe::cusparse_descr(),
+    d_csrValC,
+    d_csrRowPtrC,
+    d_csrColIndC,
+    info, &lworkInBytes
+  ));
+  cudaMalloc((void**)&d_work, lworkInBytes);
+  CUSPARSE_CHECK(cusparseDpruneDense2csrNnzByPercentage(
+    Caffe::cusparse_handle(),
+    m, n, A, m, percentage,
+    Caffe::cusparse_descr(),
+    d_csrRowPtrC,
+    nnz, info, d_work
+  ));
+  cudaMalloc((void**)&d_csrColIndC, sizeof(int ) * (*nnz));
+  cudaMalloc((void**)&d_csrValC , sizeof(double) * (*nnz));
+  CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage(
+    Caffe::cusparse_handle(),
+    m, n, A, m, percentage,
+    Caffe::cusparse_descr(),
+    d_csrValC,
+    d_csrRowPtrC,
+    d_csrColIndC,
+    info, d_work
+  ));
+  *rowPtr = (int* )malloc(sizeof(int )*(m + 1));
+  *colInd = (int* )malloc(sizeof(int )* (*nnz));
+  *val = (double*)malloc(sizeof(double)* (*nnz));
+
+  cudaMemcpy(*rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
+  cudaMemcpy(*colInd, d_csrColIndC, sizeof(int)* (*nnz), cudaMemcpyDeviceToHost);
+  cudaMemcpy(*val, d_csrValC , sizeof(double)* (*nnz), cudaMemcpyDeviceToHost);
+
+  if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
+  if (d_csrColIndC) cudaFree(d_csrColIndC);
+  if (d_csrValC) cudaFree(d_csrValC);
+
+  if(info) cusparseDestroyPruneInfo(info);
+}
 
 }  // namespace caffe

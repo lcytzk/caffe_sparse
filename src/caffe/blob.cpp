@@ -42,7 +42,11 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     // TODO
-    diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    //diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    val_.reset(new SyncedMemory());
+    one_val_.reset(new SyncedMemory());
+    row_ptr_.reset(new SyncedMemory());
+    col_ind_.reset(new SyncedMemory());
   }
 }
 
@@ -172,10 +176,17 @@ Dtype* Blob<Dtype>::mutable_gpu_diff() {
   return static_cast<Dtype*>(diff_->mutable_gpu_data());
 }
 
+// @liangchenye
 template <typename Dtype>
 Dtype* Blob<Dtype>::mutable_gpu_val() {
   CHECK(val_);
   return static_cast<Dtype*>(val_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+Dtype* Blob<Dtype>::mutable_cpu_val() {
+  CHECK(val_);
+  return static_cast<Dtype*>(val_->mutable_cpu_data());
 }
 
 template <typename Dtype>
@@ -185,10 +196,36 @@ int* Blob<Dtype>::mutable_gpu_row_ptr() {
 }
 
 template <typename Dtype>
+int* Blob<Dtype>::mutable_cpu_row_ptr() {
+  CHECK(row_ptr_);
+  return static_cast<int*>(row_ptr_->mutable_cpu_data());
+}
+
+template <typename Dtype>
 int* Blob<Dtype>::mutable_gpu_col_ind() {
   CHECK(col_ind_);
   return static_cast<int*>(col_ind_->mutable_gpu_data());
 }
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_cpu_col_ind() {
+  CHECK(col_ind_);
+  return static_cast<int*>(col_ind_->mutable_cpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_gpu_one_val() {
+  CHECK(one_val_);
+  return static_cast<int*>(one_val_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_cpu_one_val() {
+  CHECK(one_val_);
+  return static_cast<int*>(one_val_->mutable_cpu_data());
+}
+
+// end
 
 template <typename Dtype>
 void Blob<Dtype>::ShareData(const Blob& other) {
@@ -590,6 +627,7 @@ void Blob<double>::ToProto(BlobProto* proto, bool write_diff) {
         val = mutable_cpu_val();
         rowPtr = mutable_cpu_row_ptr();
         colInd = mutable_cpu_col_ind();
+        nnz = nnz_;
     }
     proto->set_nnz(nnz);
     for(int i = 0; i < nnz; ++i) {
@@ -633,12 +671,21 @@ void Blob<float>::ToProto(BlobProto* proto, bool write_diff) {
         val = mutable_cpu_val();
         rowPtr = mutable_cpu_row_ptr();
         colInd = mutable_cpu_col_ind();
+        nnz = nnz_;
     }
+    CHECK(val);
+    CHECK(rowPtr);
+    CHECK(colInd);
+    LOG(INFO) << "sparse: " << sparse_;
+    LOG(INFO) << "dense 2 sparse done, ready to save.";
+    LOG(INFO) << "count: " << count_ << " shape[0]: " << shape_[0] << " shape[1]: " << shape_[1] << " shape[2]: " << shape_[2] << " shape[3]: " << shape_[3] ;
+    LOG(INFO) << "nnz: " << nnz << " val: " << val[0] << " col: " << colInd[0];
     proto->set_nnz(nnz);
     for(int i = 0; i < nnz; ++i) {
       proto->add_val(val[i]);
       proto->add_col_ind(colInd[i]);
     }
+    LOG(INFO) << "ready to save shape.";
     for(int i = 0; i < shape_[2] + 1; ++i) {
       proto->add_row_ptr(rowPtr[i]);
     }

@@ -41,6 +41,8 @@ class Layer {
     : layer_param_(param) {
       // Set phase and copy blobs (if there are any).
       phase_ = param.phase();
+      sparse_ = false;
+      save_sparse_ = false;
       if (layer_param_.blobs_size() > 0) {
         blobs_.resize(layer_param_.blobs_size());
         for (int i = 0; i < layer_param_.blobs_size(); ++i) {
@@ -301,6 +303,10 @@ class Layer {
   vector<shared_ptr<Blob<Dtype> > > blobs_;
   /** Vector indicating whether to compute the diff of each param blob. */
   vector<bool> param_propagate_down_;
+  /** If current layer is sparse or not. */
+  bool sparse_;
+  /** If current layer need to save as sparse or not. */
+  bool save_sparse_;
 
   /** The vector that indicates whether each top blob has a non-zero weight in
    *  the objective function. */
@@ -467,7 +473,11 @@ void Layer<Dtype>::ToProto(LayerParameter* param, bool write_diff) {
   param->Clear();
   param->CopyFrom(layer_param_);
   param->clear_blobs();
+  LOG(INFO) << "sparse: " << sparse_;
+  LOG(INFO) << "save_sparse: " << save_sparse_;
   for (int i = 0; i < blobs_.size(); ++i) {
+    blobs_[i]->SetSparse(save_sparse_ && i == 0);
+    LOG(INFO) << i << " : " << blobs_[i]->sparse();
     blobs_[i]->ToProto(param->add_blobs(), write_diff);
   }
 }

@@ -24,7 +24,7 @@ template <typename Dtype>
 class Blob {
  public:
   Blob()
-       : data_(), diff_(), count_(0), capacity_(0) {}
+       : data_(), diff_(), val_(), one_val_(), row_ptr_(), col_ind_(), count_(0), capacity_(0) {}
 
   /// @brief Deprecated; use <code>Blob(const vector<int>& shape)</code>.
   explicit Blob(const int num, const int channels, const int height,
@@ -218,6 +218,10 @@ class Blob {
 
   inline bool sparse() {
     return sparse_;
+  }
+
+  inline void SetSparse(bool s) {
+    sparse_ = s;
   }
 
   inline int nnz() {

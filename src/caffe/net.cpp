@@ -510,6 +510,7 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
       }
     }
   }
+  LOG_IF(INFO, Caffe::root_solver()) << "Current shape:" << layers_[layer_id]->blobs()[0]->shape_string();
 }
 
 template <typename Dtype>
@@ -841,6 +842,7 @@ void Net<Dtype>::ToProto(NetParameter* param, bool write_diff) const {
   // Add bottom and top
   DLOG(INFO) << "Serializing " << layers_.size() << " layers";
   for (int i = 0; i < layers_.size(); ++i) {
+    LOG(INFO) << layer_names_[i];
     LayerParameter* layer_param = param->add_layer();
     layers_[i]->ToProto(layer_param, write_diff);
   }

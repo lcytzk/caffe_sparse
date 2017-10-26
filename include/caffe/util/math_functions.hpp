@@ -181,8 +181,8 @@ template <typename Dtype>
 void caffe_gpu_sparse_add(const int colSize, const int rowSize, const int nnz,
         const Dtype* val, const int* rowPtr, const int* colInd, Dtype* y);
 
-//template <typename Dtype>
-//void caffe_dense2sparse(int m, int n, const Dtype* A, float percentage, int* nnz, Dtype** val, int** colInd, int** rowPtr);
+template <typename Dtype>
+void caffe_dense2sparse(int m, int n, const Dtype* A, float percentage, int* nnz, Dtype** val, int** colInd, int** rowPtr);
 // end sparse
 
 template <typename Dtype>

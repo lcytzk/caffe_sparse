@@ -12,7 +12,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
   const Dtype* weight = this->blobs_[0]->gpu_data();
-  bool sparse = this->blobs_[0]->sparse();
+  bool sparse = this->sparse_;
   int nnzW = this->blobs_[0]->nnz();
   const Dtype* csrValW = this->blobs_[0]->gpu_val();
   const int* csrRowPtrW = this->blobs_[0]->gpu_row_ptr();
