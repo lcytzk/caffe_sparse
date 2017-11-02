@@ -241,6 +241,8 @@ class Blob {
   const Dtype* gpu_val() const;
   const Dtype* cpu_one_val() const;
   const Dtype* gpu_one_val() const;
+  const int* cpu_row_ind() const;
+  const int* gpu_row_ind() const;
   const int* cpu_row_ptr() const;
   const int* gpu_row_ptr() const;
   const int* cpu_col_ind() const;
@@ -308,6 +310,7 @@ class Blob {
   // @liangchenye add
   bool sparse_;
   int nnz_;
+  shared_ptr<SyncedMemory> row_ind_;
   shared_ptr<SyncedMemory> val_;
   shared_ptr<SyncedMemory> one_val_;
   shared_ptr<SyncedMemory> row_ptr_;

@@ -15,7 +15,8 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   N_ = num_output;
   if(Caffe::step() != 1) {
     this->sparse_ = true;
-  } else {
+  } 
+  if(Caffe::step() == 1 || Caffe::step() == 2) {
     this->save_sparse_ = true;
   }
   const int axis = bottom[0]->CanonicalAxisIndex(

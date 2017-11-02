@@ -414,6 +414,8 @@ void Solver<Dtype>::Snapshot() {
     LOG(FATAL) << "Unsupported snapshot format.";
   }
 
+  // @liangchenye
+  LOG(INFO) << "save model done.";
   SnapshotSolverState(model_filename);
 }
 

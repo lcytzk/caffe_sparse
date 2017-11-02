@@ -228,10 +228,13 @@ void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
   }
   case Caffe::GPU: {
 #ifndef CPU_ONLY
+    // TODO
+    //LOG(INFO) << param_id  << "    "  << history_[param_id]->cpu_data()[2] << "    " << net_params[param_id]->cpu_diff()[2];
     sgd_update_gpu(net_params[param_id]->count(),
         net_params[param_id]->mutable_gpu_diff(),
         history_[param_id]->mutable_gpu_data(),
         momentum, local_rate);
+    //LOG(INFO) << param_id  << "    "  << history_[param_id]->cpu_data()[2];
 #else
     NO_GPU;
 #endif

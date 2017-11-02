@@ -116,7 +116,7 @@ Caffe::Caffe()
   if (cusparseCreate(&cusparse_handle_) != CUSPARSE_STATUS_SUCCESS) {
     LOG(ERROR) << "Cannot create Cusparse handle. Cusparse won't be available.";
   }
-  if(cusparseCreateMatDescr(&cusparse_descr_)!=CUSPARSE_STATUS_SUCCESS){
+  if(cusparseCreateMatDescr(&cusparse_descr_) != CUSPARSE_STATUS_SUCCESS){
     LOG(ERROR) << "Cannot create Cusparse_desc handle. Cusparse_desc won't be available.";
   }
   // Try to create a curand handler.
@@ -165,7 +165,7 @@ void Caffe::SetDevice(const int device_id) {
   // may perform initialization using the GPU.
   CUDA_CHECK(cudaSetDevice(device_id));
   if (Get().cublas_handle_) CUBLAS_CHECK(cublasDestroy(Get().cublas_handle_));
-  if (Get().cusparse_handle_)CUSPARSE_CHECK(cusparseDestroy(Get().cusparse_handle_));
+  if (Get().cusparse_handle_) CUSPARSE_CHECK(cusparseDestroy(Get().cusparse_handle_));
   if (Get().cusparse_descr_) CUSPARSE_CHECK(cusparseDestroyMatDescr(Get().cusparse_descr_));
   if (Get().curand_generator_) {
     CURAND_CHECK(curandDestroyGenerator(Get().curand_generator_));

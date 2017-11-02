@@ -48,9 +48,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   // the current NetState.
   NetParameter filtered_param;
   FilterNet(in_param, &filtered_param);
-  LOG_IF(INFO, Caffe::root_solver())
-      << "Initializing net from parameters: " << std::endl
-      << filtered_param.DebugString();
+  //LOG_IF(INFO, Caffe::root_solver())
+  //    << "Initializing net from parameters: " << std::endl
+  //    << filtered_param.DebugString();
   // Create a copy of filtered_param with splits added where necessary.
   NetParameter param;
   InsertSplits(filtered_param, &param);
@@ -448,6 +448,7 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
       param_names_index_[param_name] = net_param_id;
     }
     const int learnable_param_id = learnable_params_.size();
+    LOG(INFO) << "layerid: " << layer_id << "    lpid: " << learnable_param_id << "   layername: " << layer_names_[layer_id];
     learnable_params_.push_back(params_[net_param_id].get());
     learnable_param_ids_.push_back(learnable_param_id);
     has_params_lr_.push_back(param_spec->has_lr_mult());
@@ -840,9 +841,7 @@ void Net<Dtype>::ToProto(NetParameter* param, bool write_diff) const {
   param->Clear();
   param->set_name(name_);
   // Add bottom and top
-  DLOG(INFO) << "Serializing " << layers_.size() << " layers";
   for (int i = 0; i < layers_.size(); ++i) {
-    LOG(INFO) << layer_names_[i];
     LayerParameter* layer_param = param->add_layer();
     layers_[i]->ToProto(layer_param, write_diff);
   }
@@ -908,6 +907,7 @@ void Net<Dtype>::ToHDF5(const string& filename, bool write_diff) const {
 template <typename Dtype>
 void Net<Dtype>::Update() {
   for (int i = 0; i < learnable_params_.size(); ++i) {
+    //LOG(INFO) << "Update learnable_params_ index: " << i;
     learnable_params_[i]->Update();
   }
 }

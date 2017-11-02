@@ -42,7 +42,6 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     // TODO
-    //diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     val_.reset(new SyncedMemory());
     one_val_.reset(new SyncedMemory());
     row_ptr_.reset(new SyncedMemory());
@@ -69,14 +68,14 @@ template <typename Dtype>
 Blob<Dtype>::Blob(const int num, const int channels, const int height,
     const int width)
   // capacity_ must be initialized before calling Reshape
-  : capacity_(0) {
+  : sparse_(false), capacity_(0) {
   Reshape(num, channels, height, width);
 }
 
 template <typename Dtype>
 Blob<Dtype>::Blob(const vector<int>& shape)
   // capacity_ must be initialized before calling Reshape
-  : capacity_(0) {
+  : sparse_(false), capacity_(0) {
   Reshape(shape);
 }
 
@@ -135,15 +134,57 @@ const Dtype* Blob<Dtype>::gpu_diff() const {
 }
 
 template <typename Dtype>
+const Dtype* Blob<Dtype>::cpu_val() const {
+  CHECK(val_);
+  return (const Dtype*)val_->cpu_data();
+}
+
+template <typename Dtype>
 const Dtype* Blob<Dtype>::gpu_val() const {
   CHECK(val_);
   return (const Dtype*)val_->gpu_data();
 }
 
 template <typename Dtype>
+const Dtype* Blob<Dtype>::cpu_one_val() const {
+  CHECK(one_val_);
+  return (const Dtype*)one_val_->cpu_data();
+}
+
+template <typename Dtype>
+const Dtype* Blob<Dtype>::gpu_one_val() const {
+  CHECK(one_val_);
+  return (const Dtype*)one_val_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::cpu_row_ind() const {
+  CHECK(row_ind_);
+  return (const int*)row_ind_->cpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::gpu_row_ind() const {
+  CHECK(row_ind_);
+  return (const int*)row_ind_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::cpu_row_ptr() const {
+  CHECK(row_ptr_);
+  return (const int*)row_ptr_->cpu_data();
+}
+
+template <typename Dtype>
 const int* Blob<Dtype>::gpu_row_ptr() const {
   CHECK(row_ptr_);
   return (const int*)row_ptr_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::cpu_col_ind() const {
+  CHECK(col_ind_);
+  return (const int*)col_ind_->cpu_data();
 }
 
 template <typename Dtype>
@@ -259,8 +300,37 @@ void Blob<Dtype>::Update() {
   case SyncedMemory::SYNCED:
 #ifndef CPU_ONLY
     // perform computation on GPU
-    if(sparse_) {
-      //caffe_gpu_sparse_add();
+    // @liangchenye
+    if(Caffe::step() == 2 && sparse_) {
+      //const Dtype* vv = (const Dtype*) val_->cpu_data();
+      //const Dtype* dd = (const Dtype*) diff_->cpu_data();
+      //const int* cc = (const int*) col_ind_->cpu_data();
+      //const int* rr = (const int*) row_ind_->cpu_data();
+      ////LOG(INFO) << "backward sparse start";
+      //LOG(INFO) << cc[0];
+      //LOG(INFO) << rr[0] * shape_[0] + cc[0];
+      ////for(int i = 0; i < 10; ++i) {
+        //printf("%f\t%f\t%f\n", vv[0], dd[rr[0] * shape_[0] + cc[0]], dd[cc[0] * shape_[1] + rr[0]]);
+      ////}
+      ////LOG(INFO) << "backward sparse add";
+      //  //val_->mutable_gpu_data(),
+      //  //row_ptr_->gpu_data();
+      //  //col_ind_->gpu_data();
+      //  //diff_->gpu_data();
+      ////LOG(INFO) << "backward sparse add";
+      ////LOG(INFO) << shape_string();
+      caffe_gpu_sparse_add(
+        shape_[1], shape_[0], nnz_,
+        static_cast<Dtype*>(val_->mutable_gpu_data()),
+        static_cast<const int*>(row_ind_->gpu_data()),
+        static_cast<const int*>(col_ind_->gpu_data()),
+        static_cast<const Dtype*>(diff_->gpu_data()));
+      ////LOG(INFO) << "backward sparse add done";
+      //vv = (const Dtype*) val_->cpu_data();
+      ////for(int i = 0; i < 10; ++i) {
+      ////  printf("%d:%f\t", i, vv[i]);
+      ////}
+        //printf("%f\n", vv[0]);
     } else {
       caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
         static_cast<const Dtype*>(diff_->gpu_data()),
@@ -564,32 +634,46 @@ void Blob<Dtype>::FromProto(const BlobProto& proto, bool reshape) {
   } else {
     CHECK(ShapeEquals(proto)) << "shape mismatch (reshape not set)";
   }
-  // copy data
-  Dtype* data_vec = mutable_cpu_data();
-  if (proto.double_data_size() > 0) {
-    CHECK_EQ(count_, proto.double_data_size());
-    for (int i = 0; i < count_; ++i) {
-      data_vec[i] = proto.double_data(i);
-    }
-  } else {
-    CHECK_EQ(count_, proto.data_size());
-    for (int i = 0; i < count_; ++i) {
-      data_vec[i] = proto.data(i);
-    }
-  }
+  // read sparse @liangchenye
   if(proto.val_size() > 0) {
     nnz_ = proto.nnz();
-    Dtype* sparse_data = mutable_cpu_val();
+    sparse_ = proto.sparse();
+    // init sync mem
+    val_.reset(new SyncedMemory(nnz_ * sizeof(Dtype)));
+    one_val_.reset(new SyncedMemory(nnz_ * sizeof(int)));
+    row_ptr_.reset(new SyncedMemory((shape_[1] + 1) * sizeof(int)));
+    col_ind_.reset(new SyncedMemory(nnz_ * sizeof(int)));
+    // end init
+    LOG(INFO) << "nnz: " << nnz_ << "  sparse: " << sparse_;
+    Dtype* val = mutable_cpu_val();
     int* one_val = mutable_cpu_one_val();
     int* col_ind = mutable_cpu_col_ind();
     int* row_ptr = mutable_cpu_row_ptr();
     for(int i = 0; i < nnz_; ++i) {
-      sparse_data[i] = proto.val(i);
+      val[i] = proto.val(i);
       one_val[i] = 1;
       col_ind[i] = proto.col_ind(i);
     }
-    for(int i = 0; i < proto.height() + 1; ++i) {
+    for(int i = 0; i < shape_[1] + 1; ++i) {
       row_ptr[i] = proto.row_ptr(i);
+    }
+    if(Caffe::step() == 2) {
+        row_ind_.reset(new SyncedMemory(nnz_ * sizeof(int)));
+        caffe_gpu_csr2coo(gpu_row_ptr(), nnz_, shape_[1], (int*)row_ind_->mutable_gpu_data());
+    }
+  } else {
+    // copy data
+    Dtype* data_vec = mutable_cpu_data();
+    if (proto.double_data_size() > 0) {
+      CHECK_EQ(count_, proto.double_data_size());
+      for (int i = 0; i < count_; ++i) {
+        data_vec[i] = proto.double_data(i);
+      }
+    } else {
+      CHECK_EQ(count_, proto.data_size());
+      for (int i = 0; i < count_; ++i) {
+        data_vec[i] = proto.data(i);
+      }
     }
   }
   if (proto.double_diff_size() > 0) {
@@ -617,24 +701,27 @@ void Blob<double>::ToProto(BlobProto* proto, bool write_diff) {
   proto->clear_double_diff();
   if(sparse_) {
     // TODO  step 1 need to prune the weight
+    proto->set_sparse(true);
+    LOG(INFO) << "set sparse as true: " << proto->sparse();
     double* val = NULL;
     int* rowPtr = NULL;
     int* colInd = NULL;
     int nnz;
     if(Caffe::step() == 1) {
-      caffe_dense2sparse(shape_[2], shape_[3], cpu_data(), 90, &nnz, &val, &colInd, &rowPtr);
+      caffe_dense2sparse(shape_[1], shape_[0], gpu_data(), 95, &nnz, &val, &colInd, &rowPtr);
     } else {
-        val = mutable_cpu_val();
-        rowPtr = mutable_cpu_row_ptr();
-        colInd = mutable_cpu_col_ind();
-        nnz = nnz_;
+      val = mutable_cpu_val();
+      rowPtr = mutable_cpu_row_ptr();
+      colInd = mutable_cpu_col_ind();
+      nnz = nnz_;
     }
+    LOG(INFO) << "nnz: " << nnz;
     proto->set_nnz(nnz);
     for(int i = 0; i < nnz; ++i) {
       proto->add_val(val[i]);
       proto->add_col_ind(colInd[i]);
     }
-    for(int i = 0; i < shape_[2] + 1; ++i) {
+    for(int i = 0; i < shape_[1] + 1; ++i) {
       proto->add_row_ptr(rowPtr[i]);
     }
   } else {
@@ -659,34 +746,41 @@ void Blob<float>::ToProto(BlobProto* proto, bool write_diff) {
   }
   proto->clear_data();
   proto->clear_diff();
+  proto->clear_val();
+  proto->clear_row_ptr();
+  proto->clear_col_ind();
   if(sparse_) {
     // TODO  step 1 need to prune the weight
+    proto->set_sparse(true);
+    LOG(INFO) << "set sparse as true: " << proto->sparse();
     float* val = NULL;
     int* rowPtr = NULL;
     int* colInd = NULL;
     int nnz;
     if(Caffe::step() == 1) {
-      caffe_dense2sparse(shape_[2], shape_[3], cpu_data(), 90, &nnz, &val, &colInd, &rowPtr);
+      caffe_dense2sparse(shape_[1], shape_[0], gpu_data(), 90, &nnz, &val, &colInd, &rowPtr);
     } else {
         val = mutable_cpu_val();
         rowPtr = mutable_cpu_row_ptr();
         colInd = mutable_cpu_col_ind();
         nnz = nnz_;
     }
-    CHECK(val);
-    CHECK(rowPtr);
-    CHECK(colInd);
-    LOG(INFO) << "sparse: " << sparse_;
-    LOG(INFO) << "dense 2 sparse done, ready to save.";
-    LOG(INFO) << "count: " << count_ << " shape[0]: " << shape_[0] << " shape[1]: " << shape_[1] << " shape[2]: " << shape_[2] << " shape[3]: " << shape_[3] ;
-    LOG(INFO) << "nnz: " << nnz << " val: " << val[0] << " col: " << colInd[0];
+    //CHECK(val);
+    //CHECK(rowPtr);
+    //CHECK(colInd);
+    //LOG(INFO) << "sparse: " << sparse_;
+    //LOG(INFO) << "dense 2 sparse done, ready to save.";
+    //LOG(INFO) << "count: " << count_ << " shape[0]: " << shape_[0] << " shape[1]: " << shape_[1] << " shape[2]: " << shape_[2] << " shape[3]: " << shape_[3] ;
+    //LOG(INFO) << "nnz: " << nnz << " val: " << val[0] << " col: " << colInd[0];
+    LOG(INFO) << "count: " << count_ << "  nnz: " << nnz;
     proto->set_nnz(nnz);
     for(int i = 0; i < nnz; ++i) {
       proto->add_val(val[i]);
       proto->add_col_ind(colInd[i]);
     }
-    LOG(INFO) << "ready to save shape.";
-    for(int i = 0; i < shape_[2] + 1; ++i) {
+    //LOG(INFO) << "ready to save shape.";
+    // shape[0] need to add one because of the csr format, at the end of row ptr is a end number
+    for(int i = 0; i < shape_[1] + 1; ++i) {
       proto->add_row_ptr(rowPtr[i]);
     }
   } else {

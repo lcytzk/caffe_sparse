@@ -43,42 +43,98 @@ void caffe_gpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
 }
 
 // gemm sparse start
-template <>
-void caffe_gpu_gemm_sparse<float>(const CBLAS_TRANSPOSE TransB,
-    const CBLAS_TRANSPOSE TransA, const int M, const int N, const int K,
-    const float* B, const int nnzA, const float alpha,
-    const float* csrValA, const int* csrRowPtrA, const int* csrColIndA,
-    const float beta, float* C) {
-  // Note that cublas follows fortran order.
-  int lda = (TransA == CblasNoTrans) ? K : M;
-  int ldb = (TransB == CblasNoTrans) ? N : K;
-  cusparseOperation_t cuTransA =
-      (TransA == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
-  cusparseOperation_t cuTransB =
-      (TransB == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
-  CUSPARSE_CHECK(cusparseScsrmm2(Caffe::cusparse_handle(), cuTransA, cuTransB,
-      N, M, K, nnzA, &alpha,
-      Caffe::cusparse_descr(), csrValA, csrRowPtrA, csrColIndA,
-      B, ldb, &beta, C, lda));
+template <typename Dtype>
+__global__ void matrix_multi_kernel(const int nnz, const int* rowInd, const int* colInd, const Dtype* val,
+    const Dtype* B, const int colSizeB, Dtype* target) {
+  CUDA_KERNEL_LOOP(index, nnz) {
+    int ra = rowInd[index];
+    int ca = colInd[index];
+    for(int j = 0; j < colSizeB; ++j) {
+      target[ra * colSizeB + j] += val[index] * B[ca * colSizeB + j];
+    }
+  }
+}
+
+template <typename Dtype>
+__global__ void matrix_multi_transA_kernel(const int nnz, const int* rowInd, const int* colInd,
+    const Dtype* val, const Dtype* B, const int colSizeB, Dtype* target) {
+  CUDA_KERNEL_LOOP(index, nnz) {
+    int ra = colInd[index];
+    int ca = rowInd[index];
+    for(int j = 0; j < colSizeB; ++j) {
+      target[ra * colSizeB + j] += val[index] * B[ca * colSizeB + j];
+    }
+  }
 }
 
 template <>
-void caffe_gpu_gemm_sparse<double>(const CBLAS_TRANSPOSE TransB,
-    const CBLAS_TRANSPOSE TransA, const int M, const int N, const int K,
-    const double* B, const int nnzA, const double alpha,
-    const double* csrValA, const int* csrRowPtrA, const int* csrColIndA,
+void caffe_gpu_sparse_multi<float>(const CBLAS_TRANSPOSE TransA,
+    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+    const float* A, const int nnzB, const float alpha,
+    const float* valB, const int* rowIndB, const int* colIndB,
+    const float beta, float* C) {
+  int ac = (TransA == CblasNoTrans) ? M : K;
+  cudaMemset((void *)C, 0, M * N * sizeof(float));   
+  //LOG(INFO) << "ac: " << ac;
+  //LOG(INFO) << "M: " << M;
+  if(TransB == CblasNoTrans) {
+    matrix_multi_kernel<float><<<CAFFE_GET_BLOCKS(nnzB), CAFFE_CUDA_NUM_THREADS>>>(nnzB, rowIndB, colIndB, valB, A, ac, C);
+  } else {
+    matrix_multi_transA_kernel<float><<<CAFFE_GET_BLOCKS(nnzB), CAFFE_CUDA_NUM_THREADS>>>(nnzB, rowIndB, colIndB, valB, A, ac, C);
+  }
+}
+
+template <>
+void caffe_gpu_sparse_multi<double>(const CBLAS_TRANSPOSE TransA,
+    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+    const double* A, const int nnzB, const double alpha,
+    const double* valB, const int* rowIndB, const int* colIndB,
+    const double beta, double * C) {
+  int ac = (TransA == CblasNoTrans) ? K : M;
+  cudaMemset((void *)C, 0, M * N * sizeof(double));   
+  if(TransB == CblasNoTrans) {
+    matrix_multi_kernel<double><<<CAFFE_GET_BLOCKS(nnzB), CAFFE_CUDA_NUM_THREADS>>>(nnzB, rowIndB, colIndB, valB, A, ac, C);
+  } else {
+    matrix_multi_transA_kernel<double><<<CAFFE_GET_BLOCKS(nnzB), CAFFE_CUDA_NUM_THREADS>>>(nnzB, rowIndB, colIndB, valB, A, ac, C);
+  }
+}
+
+template <>
+void caffe_gpu_gemm_sparse<float>(const CBLAS_TRANSPOSE TransA,
+    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+    const float* A, const int nnzB, const float alpha,
+    const float* csrValB, const int* csrRowPtrB, const int* csrColIndB,
+    const float beta, float* C) {
+  // Note that cublas follows fortran order.
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int br = (TransB == CblasNoTrans) ? N : K;
+  int bc = (TransB == CblasNoTrans) ? K : N;
+  cusparseOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUSPARSE_OPERATION_NON_TRANSPOSE : CUSPARSE_OPERATION_TRANSPOSE;
+  cusparseOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUSPARSE_OPERATION_NON_TRANSPOSE : CUSPARSE_OPERATION_TRANSPOSE;
+  CUSPARSE_CHECK(cusparseScsrmm2(Caffe::cusparse_handle(), cuTransB, cuTransA,
+      br, M, bc, nnzB, &alpha,
+      Caffe::cusparse_descr(), csrValB, csrRowPtrB, csrColIndB,
+      A, lda, &beta, C, N));
+}
+
+template <>
+void caffe_gpu_gemm_sparse<double>(const CBLAS_TRANSPOSE TransA,
+    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+    const double* A, const int nnzB, const double alpha,
+    const double* csrValB, const int* csrRowPtrB, const int* csrColIndB,
     const double beta, double* C) {
   // Note that cublas follows fortran order.
   int lda = (TransA == CblasNoTrans) ? K : M;
-  int ldb = (TransB == CblasNoTrans) ? N : K;
   cusparseOperation_t cuTransA =
-      (TransA == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
+      (TransA == CblasNoTrans) ? CUSPARSE_OPERATION_NON_TRANSPOSE : CUSPARSE_OPERATION_TRANSPOSE;
   cusparseOperation_t cuTransB =
-      (TransB == CblasNoTrans)?CUSPARSE_OPERATION_NON_TRANSPOSE:CUSPARSE_OPERATION_TRANSPOSE;
-  CUSPARSE_CHECK(cusparseDcsrmm2(Caffe::cusparse_handle(), cuTransA, cuTransB,
-      N, M, K, nnzA, &alpha,
-      Caffe::cusparse_descr(), csrValA, csrRowPtrA, csrColIndA,
-      B, ldb, &beta, C, lda));
+      (TransB == CblasNoTrans) ? CUSPARSE_OPERATION_NON_TRANSPOSE : CUSPARSE_OPERATION_TRANSPOSE;
+  CUSPARSE_CHECK(cusparseDcsrmm2(Caffe::cusparse_handle(), cuTransB, cuTransA,
+      N, M, K, nnzB, &alpha,
+      Caffe::cusparse_descr(), csrValB, csrRowPtrB, csrColIndB,
+      A, lda, &beta, C, N));
 }
 // gemm sparse end
 
@@ -521,37 +577,37 @@ void caffe_gpu_rng_gaussian(const int n, const double mu, const double sigma,
 }
 
 template <typename Dtype>
-__global__ void sparse_add_kernel(const int colSize, const int nnz, const Dtype* dense_val, const int* rowInd, const int* colInd, Dtype* y) {
-  for(int index = blockIdx.x * blockDim.x + threadIdx.x;
-          index < nnz;
-          index += blockDim.x * gridDim.x) {
-    y[index] += dense_val[colInd[index] * colSize + rowInd[index]];
+__global__ void sparse_add_kernel(const int colSize, const int nnz, const Dtype* denseVal, const int* rowInd, const int* colInd, Dtype* y) {
+  CUDA_KERNEL_LOOP(index, nnz) {
+    y[index] -= denseVal[rowInd[index] * colSize + colInd[index]];
   }
 }
 
 template <>
-void caffe_gpu_sparse_add<float>(const int colSize, const int rowSize, const int nnz, const float* val, const int* rowPtr, const int* colInd, float* y) {
+void caffe_gpu_sparse_add<float>(const int rowSize, const int colSize, const int nnz, float* val, const int* rowInd, const int* colInd, const float* denseVal) {
   // NOLINT_NEXT_LINE(whitespace/operators)
-  int* rowInd = NULL;
+  //LOG(INFO) << "before y[0]: " << val[0] << " diff: " << denseVal[colInd[0] * rowSize + rowInd[0]];
+  sparse_add_kernel<float><<<CAFFE_GET_BLOCKS(nnz), CAFFE_CUDA_NUM_THREADS>>>(
+      colSize, nnz, denseVal, rowInd, colInd, val);
+  //LOG(INFO) << "after y[0]: " << val[0];
+}
+
+void caffe_gpu_csr2coo(const int* rowPtr, int nnz, int rowSize, int *rowInd) {
   cusparseXcsr2coo(Caffe::cusparse_handle(), rowPtr, nnz, rowSize, rowInd, CUSPARSE_INDEX_BASE_ZERO);
-  sparse_add_kernel<float><<<CAFFE_GET_BLOCKS(colSize), CAFFE_CUDA_NUM_THREADS>>>(
-      colSize, nnz, val, rowInd, colInd, y);
-  cudaFree(rowInd);
 }
 
 template <>
-void caffe_gpu_sparse_add<double>(const int colSize, const int rowSize, const int nnz, const double* val, const int* rowPtr, const int* colInd, double* y) {
+void caffe_gpu_sparse_add<double>(const int rowSize, const int colSize, const int nnz, double* val, const int* rowInd, const int* colInd, const double* denseVal) {
   // NOLINT_NEXT_LINE(whitespace/operators)
-  int* rowInd = NULL;
-  cusparseXcsr2coo(Caffe::cusparse_handle(), rowPtr, nnz, rowSize, rowInd, CUSPARSE_INDEX_BASE_ZERO);
-  sparse_add_kernel<double><<<CAFFE_GET_BLOCKS(colSize), CAFFE_CUDA_NUM_THREADS>>>(
-      colSize, nnz, val, rowInd, colInd, y);
-  cudaFree(rowInd);
+  sparse_add_kernel<double><<<CAFFE_GET_BLOCKS(nnz), CAFFE_CUDA_NUM_THREADS>>>(
+      colSize, nnz, denseVal, rowInd, colInd, val);
+  //cudaDeviceSynchronize();
 }
 
 template<>
 void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
         int *nnz, float** val, int** colInd, int** rowPtr) {
+  cudaStream_t stream = NULL;
   int *d_csrRowPtrC = NULL;
   int *d_csrColIndC = NULL;
   float *d_csrValC = NULL;
@@ -559,6 +615,8 @@ void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
   pruneInfo_t info = NULL;
   size_t lworkInBytes = 0;
   cusparseCreatePruneInfo(&info);
+  cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+  cusparseSetStream(Caffe::cusparse_handle(), stream);
 
   cudaMalloc((void**)&d_csrRowPtrC, sizeof(int)*(m+1));
   CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentage_bufferSizeExt(
@@ -600,6 +658,7 @@ void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
   if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
   if (d_csrColIndC) cudaFree(d_csrColIndC);
   if (d_csrValC) cudaFree(d_csrValC);
+  if (stream) cudaStreamDestroy(stream);
 
   if(info) cusparseDestroyPruneInfo(info);
 }
@@ -607,6 +666,7 @@ void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
 template<>
 void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
         int *nnz, double** val, int** colInd, int** rowPtr) {
+  cudaStream_t stream = NULL;
   int *d_csrRowPtrC = NULL;
   int *d_csrColIndC = NULL;
   double*d_csrValC = NULL;
@@ -614,6 +674,8 @@ void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
   pruneInfo_t info = NULL;
   size_t lworkInBytes = 0;
   cusparseCreatePruneInfo(&info);
+  cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+  cusparseSetStream(Caffe::cusparse_handle(), stream);
 
   cudaMalloc((void**)&d_csrRowPtrC, sizeof(int)*(m+1));
   CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage_bufferSizeExt(
@@ -633,6 +695,7 @@ void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
     d_csrRowPtrC,
     nnz, info, d_work
   ));
+  cudaDeviceSynchronize();
   cudaMalloc((void**)&d_csrColIndC, sizeof(int ) * (*nnz));
   cudaMalloc((void**)&d_csrValC , sizeof(double) * (*nnz));
   CUSPARSE_CHECK(cusparseDpruneDense2csrByPercentage(
@@ -644,6 +707,7 @@ void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
     d_csrColIndC,
     info, d_work
   ));
+  cudaDeviceSynchronize();
   *rowPtr = (int* )malloc(sizeof(int )*(m + 1));
   *colInd = (int* )malloc(sizeof(int )* (*nnz));
   *val = (double*)malloc(sizeof(double)* (*nnz));
@@ -655,6 +719,7 @@ void caffe_dense2sparse<double>(int m, int n, const double* A, float percentage,
   if (d_csrRowPtrC) cudaFree(d_csrRowPtrC);
   if (d_csrColIndC) cudaFree(d_csrColIndC);
   if (d_csrValC) cudaFree(d_csrValC);
+  if (stream) cudaStreamDestroy(stream);
 
   if(info) cusparseDestroyPruneInfo(info);
 }

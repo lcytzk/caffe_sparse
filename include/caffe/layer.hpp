@@ -473,11 +473,8 @@ void Layer<Dtype>::ToProto(LayerParameter* param, bool write_diff) {
   param->Clear();
   param->CopyFrom(layer_param_);
   param->clear_blobs();
-  LOG(INFO) << "sparse: " << sparse_;
-  LOG(INFO) << "save_sparse: " << save_sparse_;
   for (int i = 0; i < blobs_.size(); ++i) {
     blobs_[i]->SetSparse(save_sparse_ && i == 0);
-    LOG(INFO) << i << " : " << blobs_[i]->sparse();
     blobs_[i]->ToProto(param->add_blobs(), write_diff);
   }
 }
