@@ -46,24 +46,28 @@ void caffe_gpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
 template <typename Dtype>
 __global__ void matrix_multi_kernel(const int nnz, const int* rowInd, const int* colInd, const Dtype* val,
     const Dtype* B, const int colSizeB, Dtype* target) {
-  CUDA_KERNEL_LOOP(index, nnz) {
-    int ra = rowInd[index];
-    int ca = colInd[index];
-    for(int j = 0; j < colSizeB; ++j) {
-      target[ra * colSizeB + j] += val[index] * B[ca * colSizeB + j];
-    }
+  CUDA_KERNEL_LOOP(index, nnz * colSizeB) {
+    // ind is the index of val
+    int ind = index / colSizeB;
+    // col is the col if B
+    int col = index % colSizeB;
+    int ra = rowInd[ind];
+    int ca = colInd[ind];
+    target[ra * colSizeB + col] += val[ind] * B[ca * colSizeB + col];
   }
 }
 
 template <typename Dtype>
 __global__ void matrix_multi_transA_kernel(const int nnz, const int* rowInd, const int* colInd,
     const Dtype* val, const Dtype* B, const int colSizeB, Dtype* target) {
-  CUDA_KERNEL_LOOP(index, nnz) {
-    int ra = colInd[index];
-    int ca = rowInd[index];
-    for(int j = 0; j < colSizeB; ++j) {
-      target[ra * colSizeB + j] += val[index] * B[ca * colSizeB + j];
-    }
+  CUDA_KERNEL_LOOP(index, nnz * colSizeB) {
+    // ind is the index of val
+    int ind = index / colSizeB;
+    // col is the col if B
+    int col = index % colSizeB;
+    int ra = colInd[ind];
+    int ca = rowInd[ind];
+    target[ra * colSizeB + col] += val[ind] * B[ca * colSizeB + col];
   }
 }
 
