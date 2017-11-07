@@ -134,6 +134,18 @@ const Dtype* Blob<Dtype>::gpu_diff() const {
 }
 
 template <typename Dtype>
+const Dtype* Blob<Dtype>::cpu_val_r() const {
+  CHECK(val_r_);
+  return (const Dtype*)val_r_->cpu_data();
+}
+
+template <typename Dtype>
+const Dtype* Blob<Dtype>::gpu_val_r() const {
+  CHECK(val_r_);
+  return (const Dtype*)val_r_->gpu_data();
+}
+
+template <typename Dtype>
 const Dtype* Blob<Dtype>::cpu_val() const {
   CHECK(val_);
   return (const Dtype*)val_->cpu_data();
@@ -170,6 +182,18 @@ const int* Blob<Dtype>::gpu_row_ind() const {
 }
 
 template <typename Dtype>
+const int* Blob<Dtype>::gpu_row_ptr_r() const {
+  CHECK(row_ptr_r_);
+  return (const int*)row_ptr_r_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::cpu_row_ptr_r() const {
+  CHECK(row_ptr_r_);
+  return (const int*)row_ptr_r_->cpu_data();
+}
+
+template <typename Dtype>
 const int* Blob<Dtype>::cpu_row_ptr() const {
   CHECK(row_ptr_);
   return (const int*)row_ptr_->cpu_data();
@@ -179,6 +203,18 @@ template <typename Dtype>
 const int* Blob<Dtype>::gpu_row_ptr() const {
   CHECK(row_ptr_);
   return (const int*)row_ptr_->gpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::cpu_col_ind_r() const {
+  CHECK(col_ind_r_);
+  return (const int*)col_ind_r_->cpu_data();
+}
+
+template <typename Dtype>
+const int* Blob<Dtype>::gpu_col_ind_r() const {
+  CHECK(col_ind_r_);
+  return (const int*)col_ind_r_->gpu_data();
 }
 
 template <typename Dtype>
@@ -231,6 +267,18 @@ Dtype* Blob<Dtype>::mutable_cpu_val() {
 }
 
 template <typename Dtype>
+int* Blob<Dtype>::mutable_gpu_row_ptr_r() {
+  CHECK(row_ptr_r_);
+  return static_cast<int*>(row_ptr_r_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_cpu_row_ptr_r() {
+  CHECK(row_ptr_r_);
+  return static_cast<int*>(row_ptr_r_->mutable_cpu_data());
+}
+
+template <typename Dtype>
 int* Blob<Dtype>::mutable_gpu_row_ptr() {
   CHECK(row_ptr_);
   return static_cast<int*>(row_ptr_->mutable_gpu_data());
@@ -240,6 +288,18 @@ template <typename Dtype>
 int* Blob<Dtype>::mutable_cpu_row_ptr() {
   CHECK(row_ptr_);
   return static_cast<int*>(row_ptr_->mutable_cpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_gpu_col_ind_r() {
+  CHECK(col_ind_r_);
+  return static_cast<int*>(col_ind_r_->mutable_gpu_data());
+}
+
+template <typename Dtype>
+int* Blob<Dtype>::mutable_cpu_col_ind_r() {
+  CHECK(col_ind_r_);
+  return static_cast<int*>(col_ind_r_->mutable_cpu_data());
 }
 
 template <typename Dtype>

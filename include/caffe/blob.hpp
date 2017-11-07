@@ -239,6 +239,8 @@ class Blob {
   // @liangchenye
   const Dtype* cpu_val() const;
   const Dtype* gpu_val() const;
+  const Dtype* cpu_val_r() const;
+  const Dtype* gpu_val_r() const;
   const Dtype* cpu_one_val() const;
   const Dtype* gpu_one_val() const;
   const int* cpu_row_ind() const;
@@ -247,6 +249,10 @@ class Blob {
   const int* gpu_row_ptr() const;
   const int* cpu_col_ind() const;
   const int* gpu_col_ind() const;
+  const int* cpu_row_ptr_r() const;
+  const int* gpu_row_ptr_r() const;
+  const int* cpu_col_ind_r() const;
+  const int* gpu_col_ind_r() const;
 
   Dtype* mutable_cpu_data();
   Dtype* mutable_gpu_data();
@@ -262,6 +268,10 @@ class Blob {
   int* mutable_gpu_one_val();
   int* mutable_cpu_col_ind();
   int* mutable_gpu_col_ind();
+  int* mutable_cpu_row_ptr_r();
+  int* mutable_gpu_row_ptr_r();
+  int* mutable_cpu_col_ind_r();
+  int* mutable_gpu_col_ind_r();
 
   void Update();
   void FromProto(const BlobProto& proto, bool reshape = true);
@@ -312,9 +322,12 @@ class Blob {
   int nnz_;
   shared_ptr<SyncedMemory> row_ind_;
   shared_ptr<SyncedMemory> val_;
+  shared_ptr<SyncedMemory> val_r_;
   shared_ptr<SyncedMemory> one_val_;
   shared_ptr<SyncedMemory> row_ptr_;
   shared_ptr<SyncedMemory> col_ind_;
+  shared_ptr<SyncedMemory> row_ptr_r_;
+  shared_ptr<SyncedMemory> col_ind_r_;
 
   vector<int> shape_;
   int count_;

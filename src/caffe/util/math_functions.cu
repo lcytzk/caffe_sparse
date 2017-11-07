@@ -640,6 +640,7 @@ void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
     d_csrRowPtrC,
     nnz, info, d_work
   ));
+  //printf("nnz: %d\n", (*nnz));
   cudaMalloc((void**)&d_csrColIndC, sizeof(int) * (*nnz));
   cudaMalloc((void**)&d_csrValC, sizeof(float) * (*nnz));
   CUSPARSE_CHECK(cusparseSpruneDense2csrByPercentage(
@@ -654,6 +655,29 @@ void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
   *rowPtr = (int*) malloc(sizeof(int )*(m + 1));
   *colInd = (int*) malloc(sizeof(int )* (*nnz));
   *val = (float*) malloc(sizeof(float)* (*nnz));
+
+  //float *C = NULL;
+  //  size_t start = clock();
+  //  cudaMalloc(&C, m * m * sizeof(float));
+  //  for(int i = 0; i < 100; ++i) {
+  //    caffe_gpu_gemm_sparse<float>(CblasNoTrans,
+  //        CblasNoTrans,
+  //        m, m, m, A, *nnz, (float)1.,
+  //        d_csrValC, d_csrRowPtrC, d_csrColIndC, (float)0., C);
+  //    cudaDeviceSynchronize();
+  //  }
+  //  size_t end = clock();
+  //  printf("sparse*dense no trans time used: %f\n", (double)(end-start)/CLOCKS_PER_SEC);
+  //  start = clock();
+  //  for(int i = 0; i < 100; ++i) {
+  //    caffe_gpu_gemm_sparse(CblasNoTrans,
+  //        CblasTrans,
+  //        m, m, m, A, *nnz, (float)1.,
+  //        d_csrValC, d_csrRowPtrC, d_csrColIndC, (float)0., C);
+  //    cudaDeviceSynchronize();
+  //  }
+  //  end = clock();
+  //  printf("sparse*dense trans time used: %f\n", (double)(end-start)/CLOCKS_PER_SEC);
 
   cudaMemcpy(*rowPtr, d_csrRowPtrC, sizeof(int)*(m+1), cudaMemcpyDeviceToHost);
   cudaMemcpy(*colInd, d_csrColIndC, sizeof(int)* (*nnz), cudaMemcpyDeviceToHost);
