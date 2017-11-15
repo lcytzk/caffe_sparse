@@ -608,6 +608,35 @@ void caffe_gpu_sparse_add<double>(const int rowSize, const int colSize, const in
   //cudaDeviceSynchronize();
 }
 
+template <typename Dtype>
+__global__ void importance_add(const int count, const Dtype* diff, Dtype* data, Dtype b) {
+  CUDA_KERNEL_LOOP(index, count) {
+    if(diff[index] > b || diff[index] < -b)
+      data[index] -= diff[index];
+  }
+}
+
+template <>
+void caffe_gpu_axpy_sparse<float>(const int count, const float* diff, const float* c_diff, float* data) {
+    float res;
+    int min, max;
+    cublasIsamin(Caffe::cublas_handle(), count, diff, 1, &min);
+    cublasIsamax(Caffe::cublas_handle(), count, diff, 1, &max);
+    //LOG(INFO) << "max: " << diff[max] << "  min: " << diff[min];
+    res = abs(c_diff[max]) > abs(c_diff[min]) ? abs(c_diff[max]) : abs(c_diff[min]);
+    //float avg;
+    //cublasSasum(Caffe::cublas_handle(), count, diff, 1, &avg);
+    //res = (avg / count + res) / 2;
+    //res *= 0.9;
+    int c = 0;
+    for(int i = 0; i < count; ++i) {
+        if(c_diff[i] > res || -c_diff[i] > res) c += 1;
+    }
+    //LOG(INFO) << "boundage: " << res;
+    LOG(INFO) << "count: " << count << "  c: " << c;
+    importance_add<float><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(count, diff, data, res);
+}
+
 template<>
 void caffe_dense2sparse<float>(int m, int n, const float* A, float percentage,
         int *nnz, float** val, int** colInd, int** rowPtr) {

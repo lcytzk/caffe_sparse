@@ -159,6 +159,10 @@ void caffe_gpu_gemm(const CBLAS_TRANSPOSE TransA,
 // TODO for alpha version, inner product layer should be considered
 // only convert gemm, gemv to sparse is enough.
 // sparse
+
+template <typename Dtype>
+void caffe_gpu_axpy_sparse(const int count, const Dtype* diff, const Dtype *c_diff, Dtype* data);
+
 template <typename Dtype>
 void caffe_gpu_sparse_multi(const CBLAS_TRANSPOSE TransB,
     const CBLAS_TRANSPOSE TransA, const int M, const int N, const int K,

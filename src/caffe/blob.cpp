@@ -392,9 +392,16 @@ void Blob<Dtype>::Update() {
       ////}
         //printf("%f\n", vv[0]);
     } else {
-      caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
-        static_cast<const Dtype*>(diff_->gpu_data()),
-        static_cast<Dtype*>(data_->mutable_gpu_data()));
+      //if(sparse_) {
+        caffe_gpu_axpy_sparse<Dtype>(count_, 
+          static_cast<const Dtype*>(diff_->gpu_data()),
+          static_cast<const Dtype*>(diff_->cpu_data()),
+          static_cast<Dtype*>(data_->mutable_gpu_data()));
+      //} else {
+      //  caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
+      //    static_cast<const Dtype*>(diff_->gpu_data()),
+      //    static_cast<Dtype*>(data_->mutable_gpu_data()));
+      //}
     }
 #else
     NO_GPU;
@@ -818,7 +825,7 @@ void Blob<float>::ToProto(BlobProto* proto, bool write_diff) {
     int* colInd = NULL;
     int nnz;
     if(Caffe::step() == 1) {
-      caffe_dense2sparse(shape_[1], shape_[0], gpu_data(), 90, &nnz, &val, &colInd, &rowPtr);
+      caffe_dense2sparse(shape_[1], shape_[0], gpu_data(), 99, &nnz, &val, &colInd, &rowPtr);
     } else {
         val = mutable_cpu_val();
         rowPtr = mutable_cpu_row_ptr();
